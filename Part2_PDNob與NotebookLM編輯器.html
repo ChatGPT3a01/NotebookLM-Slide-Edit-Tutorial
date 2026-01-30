@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Part 2 - PDNob & NotebookLM 編輯器 | NotebookLM 簡報後製教學</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+
+        .nav-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            z-index: 10000;
+        }
+
+        .nav-title { font-size: 20px; font-weight: 700; color: #fff; }
+        .nav-buttons { display: flex; gap: 12px; }
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.4); transform: translateY(-2px); }
+
+        .nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.25);
+            color: white;
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.4);
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 9000;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nav-arrow:hover { background: rgba(255,255,255,0.5); transform: translateY(-50%) scale(1.1); }
+        .prev-arrow { left: 30px; }
+        .next-arrow { right: 30px; }
+        .nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .slide-container { width: 100%; height: 100vh; padding-top: 60px; position: relative; z-index: 1; }
+        .slide {
+            position: absolute;
+            top: 60px; left: 0;
+            width: 100%;
+            height: calc(100vh - 60px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: 10;
+        }
+        .slide.active { display: flex; opacity: 1; z-index: 20; }
+
+        .content-card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            padding: 50px;
+            max-width: 1200px;
+            width: 95%;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        h1 { color: #1e3c72; font-size: 46px; margin-bottom: 24px; text-align: center; }
+        h2 { color: #2a5298; font-size: 34px; margin-bottom: 25px; border-bottom: 3px solid #1e3c72; padding-bottom: 12px; }
+        h3 { color: #1e3c72; font-size: 22px; margin: 20px 0 12px 0; }
+        p, li { font-size: 18px; line-height: 1.8; color: #444; margin-bottom: 12px; }
+        ul, ol { margin-left: 25px; margin-bottom: 15px; }
+
+        .box { padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 6px solid; font-size: 17px; }
+        .info { background: #e3f2fd; border-color: #2196f3; color: #0d47a1; }
+        .warning { background: #fff3cd; border-color: #ffc107; color: #856404; }
+        .success { background: #d4edda; border-color: #28a745; color: #155724; }
+        .highlight { background: linear-gradient(120deg, #1e3c72 0%, #2a5298 100%); padding: 3px 10px; border-radius: 6px; font-weight: bold; color: white; }
+
+        .concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 25px; }
+        .concept-card { background: linear-gradient(145deg, #f8f9fa, #e9ecef); padding: 22px; border-radius: 15px; border: 2px solid #e9ecef; transition: all 0.3s; }
+        .concept-card:hover { transform: translateY(-5px); border-color: #1e3c72; }
+        .concept-card h3 { margin-top: 0; color: #1e3c72; }
+
+        .step-list { counter-reset: step-counter; list-style: none; margin-left: 0; }
+        .step-list li { counter-increment: step-counter; position: relative; padding-left: 50px; margin-bottom: 20px; }
+        .step-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 35px; height: 35px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 16px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        th { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; }
+        tr:hover { background: #f8f9fa; }
+
+        .tool-header { display: flex; align-items: center; gap: 20px; margin-bottom: 25px; }
+        .tool-icon { font-size: 50px; }
+        .tool-badge { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 5px 15px; border-radius: 20px; font-size: 14px; }
+
+        .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .pros, .cons { padding: 20px; border-radius: 12px; }
+        .pros { background: #d4edda; border: 2px solid #28a745; }
+        .cons { background: #f8d7da; border: 2px solid #dc3545; }
+        .pros h4 { color: #155724; }
+        .cons h4 { color: #721c24; }
+
+        .indicators { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 4000; padding: 10px 25px; background: rgba(0,0,0,0.3); border-radius: 30px; }
+        .dot { width: 12px; height: 12px; background: rgba(255,255,255,0.4); border-radius: 50%; cursor: pointer; transition: all 0.3s; }
+        .dot.active { background: #fff; transform: scale(1.3); }
+
+        .emoji-icon { font-size: 50px; text-align: center; margin-bottom: 15px; }
+
+        @media (max-width: 768px) {
+            .content-card { padding: 25px 20px; }
+            h1 { font-size: 28px; }
+            h2 { font-size: 22px; }
+            .pros-cons { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <div class="nav-title">📝 Part 2 - PDNob & NotebookLM 編輯器</div>
+        <div class="nav-buttons">
+            <a href="index.html" class="nav-btn">🏠 首頁</a>
+            <button class="nav-btn" onclick="toggleFullscreen()">🖥️ 全螢幕</button>
+            <a href="https://www.facebook.com/?locale=zh_TW" target="_blank" class="nav-btn">📘 FB</a>
+            <a href="https://www.youtube.com/@Liang-yt02" target="_blank" class="nav-btn">🎥 YT</a>
+        </div>
+    </div>
+
+    <div class="slide-container">
+
+        <!-- Slide 1: 封面 -->
+        <div class="slide active">
+            <div class="content-card" style="text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                <div class="emoji-icon">📝</div>
+                <h4 style="color: #2a5298; letter-spacing: 2px; margin-bottom: 10px;">NotebookLM 簡報後製教學</h4>
+                <h1>Part 2: PDNob & NotebookLM 編輯器</h1>
+                <h2 style="border: none; font-weight: normal; font-size: 22px; color: #666; max-width: 800px;">
+                    OCR 精準編輯 & 一鍵移除浮水印<br>兩大高效工具完整教學
+                </h2>
+                <div style="margin-top: 35px; display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
+                    <span class="highlight">PDNob</span>
+                    <span class="highlight">OCR 辨識</span>
+                    <span class="highlight">浮水印移除</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: 本單元概覽 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🎯 本單元學習目標</h2>
+                <p>本單元將深入介紹兩款專注於「文字編輯」的工具：</p>
+
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>📝 PDNob PDF 編輯器</h3>
+                        <p>專業級 OCR 工具，精準辨識文字，直接在 PDF 中編輯，效率最高。</p>
+                        <p><strong>適合：</strong>文字/數據修改</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>✨ NotebookLM 簡報編輯器</h3>
+                        <p>專為 NotebookLM 優化的工具，一鍵移除浮水印，支援轉換為 PPTX。</p>
+                        <p><strong>適合：</strong>移除浮水印</p>
+                    </div>
+                </div>
+
+                <div class="box info">
+                    <strong>學習重點：</strong>掌握操作步驟、了解適用場景、認識優缺點，選擇最適合你的工具。
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: PDNob 介紹 -->
+        <div class="slide">
+            <div class="content-card">
+                <div class="tool-header">
+                    <div class="tool-icon">📝</div>
+                    <div>
+                        <h2 style="border: none; margin: 0;">PDNob PDF 編輯器</h2>
+                        <span class="tool-badge">OCR 精準 · 效率最高</span>
+                    </div>
+                </div>
+
+                <h3>核心優勢</h3>
+                <div class="box success">
+                    <strong>「OCR 精準，編輯直接，效率最高」</strong><br>
+                    PDNob 是目前市面上 OCR 辨識精準度最高的工具之一，能夠直接在 PDF 中編輯文字，無需轉換格式。
+                </div>
+
+                <h3>功能特色</h3>
+                <ul>
+                    <li><strong>高精準度 OCR</strong>：即使是複雜排版也能準確辨識</li>
+                    <li><strong>直接編輯</strong>：辨識後可直接修改文字，無需額外步驟</li>
+                    <li><strong>批量處理</strong>：支援同時處理多份文件</li>
+                    <li><strong>格式保留</strong>：編輯後保持原始排版格式</li>
+                    <li><strong>免費試用</strong>：無浮水印編輯 20 次</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 4: PDNob 操作步驟 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📋 PDNob 操作步驟</h2>
+
+                <ol class="step-list">
+                    <li>
+                        <strong>上傳 PDF 檔案</strong><br>
+                        將 NotebookLM 輸出的 PDF 拖曳或點擊上傳至 PDNob
+                    </li>
+                    <li>
+                        <strong>啟動 OCR 辨識功能</strong><br>
+                        點擊「OCR」按鈕，系統會自動掃描並辨識所有文字
+                    </li>
+                    <li>
+                        <strong>編輯文字內容</strong><br>
+                        點擊任意文字區域，即可直接修改內容
+                    </li>
+                    <li>
+                        <strong>調整格式與排版</strong><br>
+                        修改字體、大小、顏色，調整對齊方式
+                    </li>
+                    <li>
+                        <strong>匯出完成的檔案</strong><br>
+                        選擇輸出格式（PDF/Word/圖片）並儲存
+                    </li>
+                </ol>
+
+                <div class="box warning">
+                    <strong>小提示：</strong>OCR 辨識需要一定時間，頁數越多處理越久，請耐心等待。
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: PDNob 優缺點 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>⚖️ PDNob 優缺點分析</h2>
+
+                <div class="pros-cons">
+                    <div class="pros">
+                        <h4>✅ 優點</h4>
+                        <ul>
+                            <li>OCR 辨識精準度業界領先</li>
+                            <li>操作介面直觀易上手</li>
+                            <li>支援批量處理多份文件</li>
+                            <li>編輯後格式保持完整</li>
+                            <li>免費試用無浮水印</li>
+                        </ul>
+                    </div>
+                    <div class="cons">
+                        <h4>❌ 缺點</h4>
+                        <ul>
+                            <li>進階功能需要付費</li>
+                            <li>複雜排版可能需手動調整</li>
+                            <li>大檔案處理較慢</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3>適用對象</h3>
+                <table>
+                    <tr>
+                        <th>對象</th>
+                        <th>適用原因</th>
+                    </tr>
+                    <tr>
+                        <td>企業用戶</td>
+                        <td>批量處理報告，統一品牌風格</td>
+                    </tr>
+                    <tr>
+                        <td>顧問人員</td>
+                        <td>快速修改提案數據</td>
+                    </tr>
+                    <tr>
+                        <td>教育工作者</td>
+                        <td>調整教材內容</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Slide 6: NotebookLM 編輯器介紹 -->
+        <div class="slide">
+            <div class="content-card">
+                <div class="tool-header">
+                    <div class="tool-icon">✨</div>
+                    <div>
+                        <h2 style="border: none; margin: 0;">NotebookLM 簡報編輯器</h2>
+                        <span class="tool-badge">專屬優化 · 一鍵去浮水印</span>
+                    </div>
+                </div>
+
+                <h3>核心優勢</h3>
+                <div class="box success">
+                    <strong>「一鍵移除浮水印，完全針對 NotebookLM 優化」</strong><br>
+                    這是目前唯一專門針對 NotebookLM 輸出檔案設計的編輯工具，能夠完美識別並處理 NotebookLM 的特殊格式。
+                </div>
+
+                <h3>功能特色</h3>
+                <ul>
+                    <li><strong>專屬優化</strong>：針對 NotebookLM 輸出格式量身打造</li>
+                    <li><strong>一鍵去浮水印</strong>：自動識別並移除 NotebookLM 標記</li>
+                    <li><strong>PPTX 輸出</strong>：可直接轉換為 PowerPoint 格式</li>
+                    <li><strong>線上編輯</strong>：無需下載軟體，瀏覽器直接操作</li>
+                    <li><strong>Google 帳號登入</strong>：方便快捷的身份驗證</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 7: NotebookLM 編輯器操作步驟 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📋 NotebookLM 編輯器操作步驟</h2>
+
+                <ol class="step-list">
+                    <li>
+                        <strong>使用 Google 帳號登入</strong><br>
+                        造訪網站後，使用 Google 帳號快速登入
+                    </li>
+                    <li>
+                        <strong>上傳 NotebookLM 生成的 PDF</strong><br>
+                        拖曳或選擇檔案上傳
+                    </li>
+                    <li>
+                        <strong>選擇修改模式</strong><br>
+                        <ul>
+                            <li><strong>PPTX 輸出</strong>：轉換為 PowerPoint 格式，方便後續編輯</li>
+                            <li><strong>線上編輯</strong>：直接在瀏覽器中進行修改</li>
+                        </ul>
+                    </li>
+                    <li>
+                        <strong>執行編輯或轉換</strong><br>
+                        系統會自動處理，包括移除浮水印
+                    </li>
+                    <li>
+                        <strong>下載完成的成品</strong><br>
+                        選擇下載格式並儲存至本機
+                    </li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Slide 8: NotebookLM 編輯器限制 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>⚠️ 免費額度限制</h2>
+
+                <p>NotebookLM 編輯器提供有限的免費額度，請注意使用次數：</p>
+
+                <table>
+                    <tr>
+                        <th>功能</th>
+                        <th>每月免費額度</th>
+                        <th>超出後</th>
+                    </tr>
+                    <tr>
+                        <td>AI 分析</td>
+                        <td>5 次</td>
+                        <td>需付費或等待下月重置</td>
+                    </tr>
+                    <tr>
+                        <td>PPTX 輸出</td>
+                        <td>1 次</td>
+                        <td>需付費或等待下月重置</td>
+                    </tr>
+                </table>
+
+                <div class="pros-cons">
+                    <div class="pros">
+                        <h4>✅ 優點</h4>
+                        <ul>
+                            <li>專為 NotebookLM 優化</li>
+                            <li>一鍵移除浮水印</li>
+                            <li>無需安裝軟體</li>
+                            <li>操作簡單直覺</li>
+                        </ul>
+                    </div>
+                    <div class="cons">
+                        <h4>❌ 缺點</h4>
+                        <ul>
+                            <li>免費額度有限</li>
+                            <li>需要網路連線</li>
+                            <li>轉換可能有格式差異</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3>適用對象</h3>
+                <p><strong>個人用戶、學生、自由工作者</strong> — 偶爾需要處理 NotebookLM 簡報的使用者</p>
+            </div>
+        </div>
+
+        <!-- Slide 9: 兩工具比較 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🔄 PDNob vs NotebookLM 編輯器</h2>
+
+                <table>
+                    <tr>
+                        <th>比較項目</th>
+                        <th>PDNob</th>
+                        <th>NotebookLM 編輯器</th>
+                    </tr>
+                    <tr>
+                        <td><strong>核心功能</strong></td>
+                        <td>OCR 文字辨識與編輯</td>
+                        <td>一鍵移除浮水印</td>
+                    </tr>
+                    <tr>
+                        <td><strong>最適合</strong></td>
+                        <td>修改文字、數據</td>
+                        <td>去除浮水印、轉 PPTX</td>
+                    </tr>
+                    <tr>
+                        <td><strong>免費額度</strong></td>
+                        <td>20 次編輯</td>
+                        <td>5 次分析 / 1 次 PPTX</td>
+                    </tr>
+                    <tr>
+                        <td><strong>使用方式</strong></td>
+                        <td>桌面/網頁應用</td>
+                        <td>純網頁應用</td>
+                    </tr>
+                    <tr>
+                        <td><strong>學習曲線</strong></td>
+                        <td>中等</td>
+                        <td>簡單</td>
+                    </tr>
+                </table>
+
+                <div class="box info">
+                    <strong>選擇建議：</strong><br>
+                    • 需要修改文字內容 → 選擇 <strong>PDNob</strong><br>
+                    • 只需移除浮水印或轉換格式 → 選擇 <strong>NotebookLM 編輯器</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: 總結 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📝 Part 2 總結</h2>
+
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>📝 PDNob</h3>
+                        <ul>
+                            <li>OCR 精準度最高</li>
+                            <li>直接編輯文字數據</li>
+                            <li>支援批量處理</li>
+                            <li>適合企業用戶</li>
+                        </ul>
+                    </div>
+                    <div class="concept-card">
+                        <h3>✨ NotebookLM 編輯器</h3>
+                        <ul>
+                            <li>專為 NotebookLM 優化</li>
+                            <li>一鍵移除浮水印</li>
+                            <li>支援轉換為 PPTX</li>
+                            <li>適合個人用戶</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="box success">
+                    <strong>記住：</strong>這兩款工具專注於「文字層面」的編輯。如果你需要進行視覺升級或深度圖層編輯，請繼續學習 Part 3！
+                </div>
+
+                <div style="text-align: center; margin-top: 30px;">
+                    <p style="font-size: 22px; color: #1e3c72;">
+                        <strong>下一單元：Part 3 - Canva Pro & Lovart</strong>
+                    </p>
+                    <a href="Part3_Canva與Lovart.html" class="nav-btn" style="display: inline-block; margin-top: 15px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); padding: 12px 35px; font-size: 16px;">
+                        前往 Part 3 →
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <button class="nav-arrow prev-arrow" id="prevBtn" onclick="changeSlide(-1)">❮</button>
+    <button class="nav-arrow next-arrow" id="nextBtn" onclick="changeSlide(1)">❯</button>
+    <div class="indicators" id="indicatorContainer"></div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function init() {
+            createIndicators();
+            showSlide(0);
+            updateButtons();
+            document.addEventListener('keydown', handleKeydown);
+        }
+
+        function handleKeydown(e) {
+            if (e.key === 'ArrowLeft') changeSlide(-1);
+            if (e.key === 'ArrowRight') changeSlide(1);
+        }
+
+        function createIndicators() {
+            const container = document.getElementById('indicatorContainer');
+            container.innerHTML = '';
+            slides.forEach((_, index) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                dot.onclick = () => goToSlide(index);
+                container.appendChild(dot);
+            });
+        }
+
+        function showSlide(index) {
+            if (index < 0) index = 0;
+            if (index >= totalSlides) index = totalSlides - 1;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[index].classList.add('active');
+            currentSlide = index;
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach((dot, idx) => dot.classList.toggle('active', idx === index));
+            updateButtons();
+        }
+
+        function changeSlide(direction) { showSlide(currentSlide + direction); }
+        function goToSlide(index) { showSlide(index); }
+        function updateButtons() {
+            document.getElementById('prevBtn').disabled = currentSlide === 0;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+        }
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else if (document.exitFullscreen) document.exitFullscreen();
+        }
+
+        init();
+    </script>
+</body>
+</html>
